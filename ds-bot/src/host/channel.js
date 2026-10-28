@@ -312,6 +312,10 @@ export function install(rt) {
         case 'set-flags':
           await rt.load()
           return ok(await rt.setFlags(body.id, body))
+        // Topic backfill: label a Bot's recent history in one model call; the panel
+        // asks for a chat that has turns but no topics yet.
+        case 'topics-backfill':
+          return ok(await rt.topicsBackfill(String(body.id ?? '')))
         case 'delete-room':
           await rt.load()
           await rt.deleteRoom(body.id)

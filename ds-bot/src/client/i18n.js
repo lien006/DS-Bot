@@ -1044,6 +1044,16 @@ const ZH = {
   'Up one level': '上一级',
   'No folders inside.': '里面没有文件夹。',
   'Some folders are not shown.': '还有一些文件夹没有显示。',
+  // Topics: the labels that group a Bot's chat in the sidebar.
+  Topics: '主题',
+  'Turns are labelled as they finish; add your own below. The sidebar shows the first ones.': '每轮对话结束后自动打标；也可以在下面手动添加。侧栏会显示前几个。',
+  'No topics yet.': '还没有主题。',
+  'Labelling recent turns…': '正在为最近的对话生成主题…',
+  'New topic': '新主题',
+  'Remove topic {topic}': '移除主题 {topic}',
+  'A turn': '一轮对话',
+  'Open conversation': '打开对话',
+  'Locate in conversation': '定位到对话',
 }
 
 // Host errors stay English, since Bots read them too; they are translated where the

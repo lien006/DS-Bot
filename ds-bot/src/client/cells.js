@@ -503,13 +503,16 @@ export function ChatRows({ items, sessionId, roster, actions, useUi, clock = fal
     if (item.kind === 'bot' && last?.kind === 'bot') {
       last.texts.push(item.text)
       last.end = item.time
-    } else rows.push(item.kind === 'bot' ? { kind: 'bot', texts: [item.text], time: item.time, end: item.time } : item)
+    } else rows.push(item.kind === 'bot' ? { kind: 'bot', texts: [item.text], time: item.time, end: item.time, seq: item.seq } : item)
   }
   let before
   return rows.flatMap((row, index) => {
     // Pages are prepended, so a row keeps its distance from the end.
     const key = rows.length - index
-    const shown = chatRow(row, key, { sessionId, selfId, roster, actions, useUi, onBtwDelete })
+    let shown = chatRow(row, key, { sessionId, selfId, roster, actions, useUi, onBtwDelete })
+    // A row that carries its event's seq can be scrolled to (a topic anchor); the
+    // wrapper is transparent to the flow layout.
+    if (Number.isInteger(row.seq)) shown = h('div', { key: `${key}:seq`, className: 'bt-seq-row', 'data-seq': row.seq }, shown)
     // A part's first entry shows its time under the part's line, as a chat's first one does.
     if (row.kind === 'divider') {
       before = undefined

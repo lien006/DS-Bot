@@ -403,6 +403,38 @@ export function apply(ctx) {
     // The full-pane overlays sit above the conversation, so opening one must dismiss them
     // or the click appears to do nothing.
     isAgentSession: id => isAgentSessionId(id),
+    // The official chat keeps its turn jump internal; this rebuilds it from the
+    // same pieces: history loads through the seq exactly as the chat's own
+    // loadThrough does, then the turn's row is centred in the conversation
+    // scrollport the way the chat viewport aligns it.
+    chatJump: async (sessionId, turn, seq) => {
+      const id = partFor(sessionId)
+      if (Number.isInteger(seq)) {
+        try {
+          const binding = ctx.sessions.binding(id)
+          await binding?.session?.loadThrough(seq)
+        } catch { /* the row may already be on screen */ }
+      }
+      const rowOf = () => [...document.querySelectorAll('[data-chat-flow] [data-chat-turn]:not([hidden])')]
+        .map(node => ({ node, value: Number(node.getAttribute('data-chat-turn')) }))
+        .filter(entry => Number.isFinite(entry.value) && entry.value >= turn)
+        .sort((left, right) => left.value - right.value)[0]
+      const deadline = Date.now() + 10_000
+      for (;;) {
+        const row = rowOf()
+        if (row !== undefined) {
+          const scroller = row.node.closest('[data-conversation-scroll]') ?? row.node.parentElement
+          if (scroller !== null) {
+            const top = row.node.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+            const max = scroller.scrollHeight - scroller.clientHeight
+            scroller.scrollTop = Math.max(0, Math.min(max, scroller.scrollTop + top - 24))
+          }
+          return true
+        }
+        if (Date.now() > deadline) return false
+        await new Promise(resolve => setTimeout(resolve, 150))
+      }
+    },
     openSession: (id) => {
       // A DSH Agent Session id lands on the plain surface, not the Bot skin.
       if (isAgentSessionId(id)) return actions.openAgentSession(id)

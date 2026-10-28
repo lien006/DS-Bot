@@ -73,6 +73,7 @@ export function teamActions({ call, after, partFor, roster, ui, live, cards, hel
     quote: (sessionId, text) => ui.set(state => ({ ...state, quote: { sessionId, text, token: Date.now() } })),
     clearQuote: token => ui.set(state => (state.quote?.token === token ? { ...state, quote: null } : state)),
     setFlags: (id, flags) => after(call('set-flags', { id, ...flags })),
+    topicsBackfill: id => after(call('topics-backfill', { id })),
     deleteRoom: id => after(call('delete-room', { id })),
     openMenu: (menu) => { ui.set(state => ({ ...state, menu })) },
     closeMenu: () => { ui.set(state => (state.menu ? { ...state, menu: null } : state)) },

@@ -55,7 +55,7 @@ export function createTeam() {
   const seenStore = sharedMap(STORAGE.seen)
   let seenAt = seenStore.read()
   const roster = createSource(EMPTY_ROSTER)
-  const ui = createSource({ details: null, view: 'details', renaming: false, tab: null, newChat: null, exchange: null, menu: null, voice: null, palette: null, quote: null, settings: null, memory: null, toast: null, signIn: null, renameAgent: null, unread: unreadStore.read(), reactions: reactionStore.read(), visits: {} })
+  const ui = createSource({ details: null, view: 'details', renaming: false, tab: null, newChat: null, exchange: null, menu: null, voice: null, palette: null, quote: null, settings: null, memory: null, toast: null, signIn: null, renameAgent: null, unread: unreadStore.read(), reactions: reactionStore.read(), visits: {}, jump: null })
   const activity = createSource({})
   const work = createSource(NO_WORK)
   const memoryNews = createSource({})
@@ -146,6 +146,13 @@ export function createTeam() {
       show(partFor(id))
     },
     landOn: id => show(partFor(id)),
+    // A topic anchor: open the chat and let it page back to the seq, in the app's
+    // own conversation view. The chat clears the jump once it lands.
+    jumpTo: (id, seq) => {
+      if (Number.isInteger(seq)) ui.set(state => ({ ...state, jump: { sessionId: partFor(id), seq, token: Date.now() } }))
+      show(partFor(id))
+    },
+    clearJump: token => ui.set(state => (state.jump?.token === token ? { ...state, jump: null } : state)),
     toggleSidebar: () => layout.set(state => ({ ...state, wide: !state.wide })),
     markUnread: id => writeUnread(id, true),
     clearUnread: id => writeUnread(id, false),

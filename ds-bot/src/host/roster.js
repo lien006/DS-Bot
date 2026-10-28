@@ -346,11 +346,47 @@ export function install(rt) {
     return bot
   }
 
-  async function setFlags(id, { pinned, hidden }) {
+  // A topic is a short user-chosen label that groups chats in the sidebar. Blank
+  // ones are dropped, repeats fall away in the order they first appear, and a chat
+  // keeps at most TOPICS_MAX of them, each no longer than TOPIC_MAX characters.
+  const TOPICS_MAX = 8
+  const TOPIC_MAX = 16
+  function cleanTopics(list) {
+    if (!Array.isArray(list)) throw new Error('Topics must be a list')
+    const seen = new Set()
+    const next = []
+    for (const item of list) {
+      const topic = unquote(String(item ?? '')).replace(/^#+/, '').replace(/\s+/g, ' ').trim().slice(0, TOPIC_MAX)
+      if (topic === '' || seen.has(topic)) continue
+      seen.add(topic)
+      next.push(topic)
+      if (next.length === TOPICS_MAX) break
+    }
+    return next
+  }
+
+  async function setFlags(id, { pinned, hidden, topics, autoTopics }) {
     const entry = rt.botOf(id) ?? rt.roomOf(id) ?? rt.own(state.agents, id)
     if (entry === undefined) throw new Error('Unknown conversation')
     if (typeof pinned === 'boolean') entry.pinned = pinned
     if (typeof hidden === 'boolean') entry.hidden = hidden
+    // `autoTopics`: the details drawer refreshes this Bot's suggested topics after
+    // each finished turn while its panel is open.
+    if (autoTopics !== undefined) {
+      if (autoTopics === true) entry.autoTopics = true
+      else delete entry.autoTopics
+    }
+    if (topics !== undefined) {
+      const next = cleanTopics(topics)
+      if (next.length > 0) entry.topics = next
+      else delete entry.topics
+      // An anchor whose label is gone goes with it.
+      if (entry.topicLog !== undefined) {
+        const keep = Object.fromEntries(Object.entries(entry.topicLog).filter(([label]) => next.includes(label)))
+        if (Object.keys(keep).length > 0) entry.topicLog = keep
+        else delete entry.topicLog
+      }
+    }
     await rt.save()
     return entry
   }

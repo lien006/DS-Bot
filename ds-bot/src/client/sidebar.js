@@ -71,7 +71,8 @@ function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessio
     actions.openMenu({ kind: 'bot', id, x: event.clientX, y: event.clientY })
   }
   const pinned = bot.pinned === true && !tile
-  const label = [bot.name, main ? t('Main Bot') : '', pinned ? t('Pinned') : '', running || away ? t('Working') : '', waitsFor, approval ? t('Waiting for your approval') : alert ? t('Waiting for your answer') : '', unread ? t('Unread activity') : ''].filter(Boolean).join(', ')
+  const topics = Array.isArray(bot.topics) ? bot.topics : []
+  const label = [bot.name, ...topics.map(topic => `#${topic}`), main ? t('Main Bot') : '', pinned ? t('Pinned') : '', running || away ? t('Working') : '', waitsFor, approval ? t('Waiting for your approval') : alert ? t('Waiting for your answer') : '', unread ? t('Unread activity') : ''].filter(Boolean).join(', ')
   if (tile && wide) {
     return h('div', { className: 'bt-tile-wrap' }, h('button', {
       type: 'button', className: 'bt-tile', 'aria-label': label, 'aria-current': active ? 'page' : undefined,
@@ -88,7 +89,9 @@ function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessio
   h(BotAvatar, { bot, size: 36, state, main }),
   pinned && !wide ? h(PinMark) : null,
   wide ? h('span', { className: 'bt-row-body' },
-    h('span', { className: 'bt-row-name' }, h('span', { className: 'bt-row-title' }, bot.name), pinned ? h(PinMark) : null),
+    h('span', { className: 'bt-row-name' }, h('span', { className: 'bt-row-title' }, bot.name), pinned ? h(PinMark) : null,
+      topics.slice(0, 2).map(topic => h('span', { key: topic, className: 'bt-row-topic' }, `#${topic}`)),
+      topics.length > 2 ? h('span', { className: 'bt-row-topic bt-row-topic-more' }, `+${topics.length - 2}`) : null),
     runningLine ? h('span', { className: 'bt-row-preview' }, runningLine)
       : awayLine ? h('span', { className: 'bt-row-preview' }, awayLine)
         : waitsFor ? h('span', { className: 'bt-row-preview' }, waitsFor)

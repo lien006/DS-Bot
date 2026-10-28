@@ -171,6 +171,26 @@ export function Chat({ sessionId, team }) {
     const node = scroller.current
     follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < FOLLOW_PX
   }
+
+  // A topic jump: page back until the seq is on screen, then land on its row and
+  // let the jump go. `seq` markers live on rows the chat already renders.
+  const jump = hooks.useUi(state => (state.jump?.sessionId === sessionId ? state.jump : null))
+  useEffect(() => {
+    if (jump === null || view.sessionId === null) return
+    const target = view.items.filter(item => Number.isInteger(item.seq) && item.seq <= jump.seq).at(-1)
+    const oldest = view.items.find(item => Number.isInteger(item.seq))
+    if (target !== undefined && (oldest === undefined || oldest.seq >= jump.seq || view.cursor === null)) {
+      // The seq wrapper is display:contents and has no box of its own; its first
+      // child is the row to land on.
+      const wrap = scroller.current?.querySelector(`[data-seq="${target.seq}"]`)
+      const node = wrap?.firstElementChild
+      if (node === null || node === undefined) return
+      node.scrollIntoView({ block: 'center' })
+      actions.clearJump(jump.token)
+    } else if (view.cursor !== null) {
+      if (!view.loading) void load(view.cursor, scroller.current)
+    } else actions.clearJump(jump.token)
+  }, [jump?.token, view.items, view.loading, view.cursor, view.sessionId])
   const earlier = view.loading && view.sessionId !== null ? h(Shimmer, null, t('Loading earlier messages…'))
     : view.failed ? h('button', { type: 'button', className: 'bt-soft', onClick: () => load(view.cursor ?? undefined, scroller.current) }, t('Couldn’t load earlier messages · Retry'))
       : view.cursor ? h('button', { type: 'button', className: 'bt-soft', onClick: () => load(view.cursor, scroller.current) }, t('Load earlier')) : null
