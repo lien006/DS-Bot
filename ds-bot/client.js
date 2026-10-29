@@ -1090,7 +1090,17 @@ var ZH = {
   "Use this folder": "使用这个文件夹",
   "Up one level": "上一级",
   "No folders inside.": "里面没有文件夹。",
-  "Some folders are not shown.": "还有一些文件夹没有显示。"
+  "Some folders are not shown.": "还有一些文件夹没有显示。",
+  // Topics: the labels that group a Bot's chat in the sidebar.
+  Topics: "主题",
+  "Turns are labelled as they finish; add your own below. The sidebar shows the first ones.": "每轮对话结束后自动打标；也可以在下面手动添加。侧栏会显示前几个。",
+  "No topics yet.": "还没有主题。",
+  "Labelling recent turns…": "正在为最近的对话生成主题…",
+  "New topic": "新主题",
+  "Remove topic {topic}": "移除主题 {topic}",
+  "A turn": "一轮对话",
+  "Open conversation": "打开对话",
+  "Locate in conversation": "定位到对话"
 };
 var HOST_ERRORS = [
   [/^Model (.+) is not available\. Available: (.*)$/, "模型 $1 不可用。可用的：$2"],
@@ -1622,6 +1632,7 @@ function teamActions({ call: call2, after, partFor, roster, ui: ui2, live, cards
     quote: (sessionId, text) => ui2.set((state) => ({ ...state, quote: { sessionId, text, token: Date.now() } })),
     clearQuote: (token) => ui2.set((state) => state.quote?.token === token ? { ...state, quote: null } : state),
     setFlags: (id, flags) => after(call2("set-flags", { id, ...flags })),
+    topicsBackfill: (id) => after(call2("topics-backfill", { id })),
     deleteRoom: (id) => after(call2("delete-room", { id })),
     openMenu: (menu) => {
       ui2.set((state) => ({ ...state, menu }));
@@ -2734,6 +2745,36 @@ html[data-windows-titlebar]:not([data-fullscreen]) :is(.bt-pane,.bt-panel)::befo
 .bt-tabs>.bt-thumb{top:0;bottom:0;border-radius:9999px;background:var(--bt-hover)}
 .bt-tabs[data-glide] .bt-tab[aria-selected=true]{background:transparent}
 .bt-drawer-body{flex:1;overflow-y:auto;padding:20px 16px 16px;font-size:13px;line-height:18px;display:flex;flex-direction:column;gap:16px}
+/* Topics: the labels that group a chat in the sidebar. */
+.bt-topics{display:flex;flex-direction:column;gap:10px}
+.bt-topic-chips{display:flex;flex-wrap:wrap;gap:6px}
+.bt-topic-wrap{display:inline-flex;flex-direction:column;gap:4px;max-width:100%}
+.bt-topic-chip-row{display:inline-flex;align-items:center}
+.bt-topic-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:0;border-radius:999px;background:var(--bt-tag-bg);color:var(--bt-tag-ink);font-size:12px;line-height:18px;cursor:pointer;max-width:100%}
+.bt-topic-chip:hover{background:var(--bt-hover)}
+.bt-topic-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
+.bt-topic-count{font-size:10px;opacity:.7}
+.bt-topic-x{border:0;background:none;color:inherit;cursor:pointer;font-size:13px;line-height:16px;padding:0 2px;border-radius:999px;opacity:.6;align-self:center}
+.bt-topic-x:hover{opacity:1;background:var(--bt-hover)}
+.bt-topic-spots{display:flex;flex-direction:column;gap:2px;padding:4px;border-radius:8px;background:var(--bt-hover)}
+.bt-topic-spot{display:flex;flex-direction:column;gap:2px}
+.bt-topic-spot-head{display:flex;gap:6px;align-items:baseline;border:0;background:none;color:var(--bt-ink-2);font-size:12px;line-height:16px;text-align:left;cursor:pointer;padding:2px 4px;border-radius:6px;width:100%}
+.bt-topic-spot-head:hover{background:var(--bt-card);color:var(--bt-ink)}
+.bt-topic-spot-body{padding:2px 6px 6px;border-left:2px solid var(--bt-line-2);margin-left:4px;display:flex;flex-direction:column;gap:6px}
+.bt-topic-spot-reply{font-size:12px;line-height:17px;color:var(--bt-ink-2);max-height:120px;overflow:hidden;white-space:pre-wrap;word-break:break-word}
+.bt-topic-spot-open{align-self:flex-start;border:0;background:var(--bt-hover);color:var(--bt-ink);font-size:12px;line-height:18px;padding:2px 8px;border-radius:6px;cursor:pointer}
+.bt-topic-spot-open:hover{background:var(--bt-active)}
+.bt-topic-spot-turn{flex:none;color:var(--bt-accent)}
+.bt-topic-spot-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}
+.bt-topic-spot-time{font-size:10px;color:var(--bt-ink-3);padding:2px 4px}
+.bt-topic-add{display:flex;gap:8px}
+.bt-topic-input{flex:1;min-width:0;border:.5px solid var(--bt-line-2);border-radius:8px;padding:6px 10px;background:var(--bt-main);color:var(--bt-ink);font-size:13px;line-height:18px;outline:none}
+.bt-topic-input:focus{border-color:var(--bt-accent)}
+.bt-row-topic{flex:none;font-size:10px;line-height:14px;padding:0 4px;border-radius:4px;background:var(--bt-tag-bg);color:var(--bt-tag-ink);white-space:nowrap;max-width:72px;overflow:hidden;text-overflow:ellipsis}
+.bt-row-topic-more{padding:0 3px}
+/* A row wrapper that only carries the event's seq for a topic jump; the flow
+   layout sees its children as if it were not there. */
+.bt-seq-row{display:contents}
 .bt-empty{text-align:center;color:var(--bt-ink-3);font-size:13px;line-height:18px;padding:8px 12px}
 .bt-section-title{font-size:12px;color:var(--bt-ink-2);margin-bottom:6px}
 .bt-muted{color:var(--bt-ink-2)}
@@ -8581,7 +8622,8 @@ function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessio
     actions.openMenu({ kind: "bot", id, x: event.clientX, y: event.clientY });
   };
   const pinned = bot.pinned === true && !tile;
-  const label = [bot.name, main ? t("Main Bot") : "", pinned ? t("Pinned") : "", running || away ? t("Working") : "", waitsFor, approval ? t("Waiting for your approval") : alert ? t("Waiting for your answer") : "", unread ? t("Unread activity") : ""].filter(Boolean).join(", ");
+  const topics = Array.isArray(bot.topics) ? bot.topics : [];
+  const label = [bot.name, ...topics.map((topic) => `#${topic}`), main ? t("Main Bot") : "", pinned ? t("Pinned") : "", running || away ? t("Working") : "", waitsFor, approval ? t("Waiting for your approval") : alert ? t("Waiting for your answer") : "", unread ? t("Unread activity") : ""].filter(Boolean).join(", ");
   if (tile && wide) {
     return (0, import_react15.createElement)("div", { className: "bt-tile-wrap" }, (0, import_react15.createElement)(
       "button",
@@ -8617,7 +8659,14 @@ function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessio
     wide ? (0, import_react15.createElement)(
       "span",
       { className: "bt-row-body" },
-      (0, import_react15.createElement)("span", { className: "bt-row-name" }, (0, import_react15.createElement)("span", { className: "bt-row-title" }, bot.name), pinned ? (0, import_react15.createElement)(PinMark) : null),
+      (0, import_react15.createElement)(
+        "span",
+        { className: "bt-row-name" },
+        (0, import_react15.createElement)("span", { className: "bt-row-title" }, bot.name),
+        pinned ? (0, import_react15.createElement)(PinMark) : null,
+        topics.slice(0, 2).map((topic) => (0, import_react15.createElement)("span", { key: topic, className: "bt-row-topic" }, `#${topic}`)),
+        topics.length > 2 ? (0, import_react15.createElement)("span", { className: "bt-row-topic bt-row-topic-more" }, `+${topics.length - 2}`) : null
+      ),
       runningLine ? (0, import_react15.createElement)("span", { className: "bt-row-preview" }, runningLine) : awayLine ? (0, import_react15.createElement)("span", { className: "bt-row-preview" }, awayLine) : waitsFor ? (0, import_react15.createElement)("span", { className: "bt-row-preview" }, waitsFor) : preview ? (0, import_react15.createElement)("span", { className: "bt-row-preview" }, preview) : null
     ) : null,
     wide && unread && !active ? (0, import_react15.createElement)("span", { className: "bt-unread", "aria-hidden": true }) : null
@@ -16484,7 +16533,8 @@ function transcriptOf(list, id, name, hiddenTurns = []) {
   }
   return lines.join("\n\n");
 }
-var TAB_LABELS = { details: "Details", browser: "Browser" };
+var TAB_LABELS = { topics: "Topics", details: "Details", browser: "Browser" };
+var tabLabel = (key) => key === "topics" ? `#${t(TAB_LABELS[key])}` : t(TAB_LABELS[key]);
 var hostOf2 = (url) => {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -16605,6 +16655,177 @@ function About({ text, title = "About" }) {
     (0, import_react43.createElement)("div", { className: "bt-section-title" }, t(title)),
     (0, import_react43.createElement)("div", { ref: body, className: "bt-about", "data-open": open || void 0 }, text),
     long ? (0, import_react43.createElement)("button", { type: "button", className: "bt-more", onClick: () => setOpen((value) => !value) }, open ? t("Show less") : t("Show more")) : null
+  );
+}
+function TopicsPanel({ bot, actions, run: run2, useSessions }) {
+  const topics = Array.isArray(bot.topics) ? bot.topics : [];
+  const log = bot.topicLog ?? {};
+  const [draft, setDraft] = (0, import_react43.useState)("");
+  const [open, setOpen] = (0, import_react43.useState)(null);
+  const [openSpot, setOpenSpot] = (0, import_react43.useState)(null);
+  const [backfilling, setBackfilling] = (0, import_react43.useState)(false);
+  const backfilled = (0, import_react43.useRef)(false);
+  (0, import_react43.useEffect)(() => {
+    if (topics.length > 0 && Object.keys(log).length > 0 || backfilled.current || actions.topicsBackfill === void 0) return;
+    backfilled.current = true;
+    setBackfilling(true);
+    Promise.resolve(actions.topicsBackfill(bot.id)).catch(() => {
+    }).finally(() => setBackfilling(false));
+  }, [bot.id]);
+  const outline = useSessions((list) => {
+    const id = currentPart(bot);
+    const raw = list.projectionsBySession?.[id]?.values?.turnOutline ?? list.byId[id]?.projectionValues?.turnOutline;
+    const entries2 = Array.isArray(raw) ? raw : Array.isArray(raw?.turns) ? raw.turns : [];
+    return JSON.stringify(entries2.map((entry) => [entry.seq, entry.turn, (entry.prompt ?? "").slice(0, 140), stripHeader(entry.response ?? "").slice(0, 200)]));
+  });
+  const turns = JSON.parse(outline);
+  const entryOfTurn = (turn) => turns.find((entry) => entry[1] === turn);
+  const entryNearSeq = (seq) => turns.filter((entry) => Number(entry[0]) <= seq).at(-1);
+  const spotsOf = (anchor) => {
+    if (anchor === void 0) return [];
+    const entries2 = Array.isArray(anchor.turns) && anchor.turns.length > 0 ? anchor.turns.map(entryOfTurn) : (anchor.seqs ?? []).map(entryNearSeq);
+    return [...new Map(entries2.filter(Boolean).map((entry) => [entry[1], entry])).values()].map((entry) => ({ turn: entry[1], seq: entry[0], prompt: entry[2], response: entry[3] }));
+  };
+  const turnRail = () => [...document.querySelectorAll("nav[aria-label]")].find((nav) => /^(轮次导航|Turn navigation)$/.test(nav.getAttribute("aria-label") || ""));
+  const railMark = (rail, turn) => [...rail.querySelectorAll("button")].find((item) => {
+    const label = item.getAttribute("aria-label") || "";
+    return label.includes(`第 ${turn} 轮`) || new RegExp(`turn ${turn}\\b`, "i").test(label);
+  });
+  const clickTurnRail = (turn, report) => {
+    let tries = 0;
+    const attempt = () => {
+      const rail = turnRail();
+      if (rail === void 0) {
+        if (tries > 60) {
+          report(`定位失败：等了 6 秒没找到轮次导航（页面 nav 数 ${document.querySelectorAll("nav").length}）`);
+          return true;
+        }
+        return false;
+      }
+      const button = railMark(rail, turn);
+      if (button !== void 0) {
+        button.click();
+        report(`已定位到第 ${turn} 轮`);
+        return true;
+      }
+      if (tries > 60) {
+        const marks = [...rail.querySelectorAll("button")].slice(0, 5).map((item) => item.getAttribute("aria-label"));
+        report(`定位失败：轮轨上没有第 ${turn} 轮（标记示例 ${JSON.stringify(marks)}）`);
+        return true;
+      }
+      const scroller = rail.querySelector("div");
+      if (scroller !== null) scroller.scrollTop += 120;
+      return false;
+    };
+    const step = () => {
+      tries += 1;
+      if (attempt()) return;
+      setTimeout(step, 100);
+    };
+    step();
+  };
+  const locateTurn = (spot) => {
+    actions.openSession(bot.id);
+    if (spot.turn === void 0) return;
+    const report = (text) => actions.reportError(new Error(text), "topic-locate");
+    if (actions.chatJump !== void 0) {
+      setTimeout(() => {
+        void actions.chatJump(bot.id, spot.turn, spot.seq).then((landed) => report(landed ? `已定位到第 ${spot.turn} 轮` : `定位失败：对话里没有第 ${spot.turn} 轮`));
+      }, 300);
+      return;
+    }
+    setTimeout(() => clickTurnRail(spot.turn, report), 350);
+  };
+  const save = (next) => run2(actions.setFlags(bot.id, { topics: next }));
+  const add = () => {
+    const value = draft.trim();
+    if (value === "") return;
+    setDraft("");
+    if (topics.includes(value)) return;
+    void save([...topics, value]);
+  };
+  return (0, import_react43.createElement)(
+    "div",
+    { className: "bt-topics" },
+    (0, import_react43.createElement)("div", { className: "bt-section-title" }, t("Topics")),
+    (0, import_react43.createElement)("div", { className: "bt-note" }, t("Turns are labelled as they finish; add your own below. The sidebar shows the first ones.")),
+    topics.length > 0 ? (0, import_react43.createElement)("div", { className: "bt-topic-chips" }, topics.map((topic) => {
+      const anchor = log[topic];
+      const spots = spotsOf(anchor);
+      return (0, import_react43.createElement)(
+        "span",
+        { key: topic, className: "bt-topic-wrap" },
+        (0, import_react43.createElement)(
+          "span",
+          { className: "bt-topic-chip-row" },
+          (0, import_react43.createElement)(
+            "button",
+            {
+              type: "button",
+              className: "bt-topic-chip",
+              "aria-expanded": open === topic || void 0,
+              onClick: () => {
+                setOpen(open === topic ? null : topic);
+                if (open !== topic && spots.length === 0) actions.openSession(bot.id);
+              }
+            },
+            (0, import_react43.createElement)("span", { className: "bt-topic-text" }, `#${topic}`),
+            spots.length > 0 ? (0, import_react43.createElement)("span", { className: "bt-topic-count" }, `×${spots.length}`) : null
+          ),
+          (0, import_react43.createElement)("button", {
+            type: "button",
+            className: "bt-topic-x",
+            "aria-label": t("Remove topic {topic}", { topic }),
+            title: t("Remove"),
+            onClick: () => void save(topics.filter((other) => other !== topic))
+          }, "×")
+        ),
+        open === topic && spots.length > 0 ? (0, import_react43.createElement)(
+          "div",
+          { className: "bt-topic-spots" },
+          spots.map((spot) => (0, import_react43.createElement)(
+            "div",
+            { key: spot.turn, className: "bt-topic-spot" },
+            (0, import_react43.createElement)(
+              "button",
+              {
+                type: "button",
+                className: "bt-topic-spot-head",
+                onClick: () => setOpenSpot(openSpot === spot.turn ? null : spot.turn)
+              },
+              (0, import_react43.createElement)("span", { className: "bt-topic-spot-turn" }, spot.turn !== void 0 ? `#${spot.turn}` : "•"),
+              (0, import_react43.createElement)("span", { className: "bt-topic-spot-text" }, spot.prompt || (spot.response ?? "").slice(0, 60) || t("A turn"))
+            ),
+            openSpot === spot.turn ? (0, import_react43.createElement)(
+              "div",
+              { className: "bt-topic-spot-body" },
+              spot.response ? (0, import_react43.createElement)("div", { className: "bt-topic-spot-reply" }, spot.response) : null,
+              (0, import_react43.createElement)("button", { type: "button", className: "bt-topic-spot-open", onClick: () => locateTurn(spot) }, t("Locate in conversation"))
+            ) : null
+          )),
+          anchor?.time ? (0, import_react43.createElement)("span", { className: "bt-topic-spot-time" }, new Date(anchor.time).toLocaleString(dateLocale())) : null
+        ) : null
+      );
+    })) : (0, import_react43.createElement)("div", { className: "bt-muted" }, backfilling ? t("Labelling recent turns…") : t("No topics yet.")),
+    (0, import_react43.createElement)(
+      "div",
+      { className: "bt-topic-add" },
+      (0, import_react43.createElement)("input", {
+        className: "bt-topic-input",
+        value: draft,
+        maxLength: 16,
+        "aria-label": t("New topic"),
+        placeholder: t("New topic"),
+        onChange: (event) => setDraft(event.target.value),
+        onKeyDown: (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            add();
+          }
+        }
+      }),
+      (0, import_react43.createElement)("button", { type: "button", className: "bt-soft", disabled: draft.trim() === "", onClick: add }, t("Add"))
+    )
   );
 }
 var PILE_MAX = 4;
@@ -16772,7 +16993,7 @@ function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, roster, a
     if (room2) await run2(actions.updateRoom(room2.id, { name: next }));
   };
   const subtitle = bot ? bot.role : roomSubtitle(room2, roster);
-  const tabs = bot ? ["details", "browser"] : ["details"];
+  const tabs = bot ? ["topics", "details", "browser"] : ["details"];
   return [
     (0, import_react43.createElement)(import_react43.Fragment, { key: "top" }, top),
     (0, import_react43.createElement)(
@@ -16804,13 +17025,14 @@ function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, roster, a
       "div",
       { key: "tabs", ref: glide.box, className: "bt-tabs", role: "tablist", "data-move": side },
       (0, import_react43.createElement)("span", { ref: glide.thumb, className: "bt-thumb", "aria-hidden": true }),
-      tabs.map((key) => (0, import_react43.createElement)("button", { key, type: "button", role: "tab", className: "bt-tab", "aria-selected": tab === key, onClick: () => setTab(key) }, t(TAB_LABELS[key])))
+      tabs.map((key) => (0, import_react43.createElement)("button", { key, type: "button", role: "tab", className: "bt-tab", "aria-selected": tab === key, onClick: () => setTab(key) }, tabLabel(key)))
     ) : null,
     (0, import_react43.createElement)(
       "div",
       { key: `body:${tab}`, className: "bt-drawer-body", "data-move": move },
       errorLine,
       room2 && tab === "details" ? (0, import_react43.createElement)(GroupOverview, { room: room2, roster, actions, usage, useWork, openSettings: () => setView("settings") }) : null,
+      bot && tab === "topics" ? (0, import_react43.createElement)(TopicsPanel, { bot, actions, run: run2, useSessions }) : null,
       bot && tab === "details" ? [
         (0, import_react43.createElement)(RunStats, { key: "stats", bot, part, running, actions }),
         (0, import_react43.createElement)(
@@ -16938,7 +17160,7 @@ var chatRoom = {
 };
 var shortAddress = (url) => String(url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
 var reducedMotion2 = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-var tabLabel = (page) => page.title || shortAddress(page.url) || t("New tab");
+var tabLabel2 = (page) => page.title || shortAddress(page.url) || t("New tab");
 function PanelMenu({ items, className, "aria-label": label }) {
   const [open, setOpen] = (0, import_react44.useState)(false);
   const wrap = (0, import_react44.useRef)(null);
@@ -17116,7 +17338,7 @@ function PanelStrip({ bot, subject, view, ids, active, sides, side, canBrowse, r
             }
           },
           (0, import_react44.createElement)(Favicon, { src: page.favicon, className: "bt-ptab-fav" }),
-          (0, import_react44.createElement)("span", { className: "bt-ptab-title" }, tabLabel(page)),
+          (0, import_react44.createElement)("span", { className: "bt-ptab-title" }, tabLabel2(page)),
           (0, import_react44.createElement)("span", {
             className: "bt-ptab-x",
             role: "button",
@@ -19553,6 +19775,36 @@ function apply(ctx) {
     // The full-pane overlays sit above the conversation, so opening one must dismiss them
     // or the click appears to do nothing.
     isAgentSession: (id) => isAgentSessionId(id),
+    // The official chat keeps its turn jump internal; this rebuilds it from the
+    // same pieces: history loads through the seq exactly as the chat's own
+    // loadThrough does, then the turn's row is centred in the conversation
+    // scrollport the way the chat viewport aligns it.
+    chatJump: async (sessionId, turn, seq) => {
+      const id = partFor(sessionId);
+      if (Number.isInteger(seq)) {
+        try {
+          const binding = ctx.sessions.binding(id);
+          await binding?.session?.loadThrough(seq);
+        } catch {
+        }
+      }
+      const rowOf = () => [...document.querySelectorAll("[data-chat-flow] [data-chat-turn]:not([hidden])")].map((node) => ({ node, value: Number(node.getAttribute("data-chat-turn")) })).filter((entry) => Number.isFinite(entry.value) && entry.value >= turn).sort((left, right) => left.value - right.value)[0];
+      const deadline = Date.now() + 1e4;
+      for (; ; ) {
+        const row = rowOf();
+        if (row !== void 0) {
+          const scroller = row.node.closest("[data-conversation-scroll]") ?? row.node.parentElement;
+          if (scroller !== null) {
+            const top = row.node.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+            const max = scroller.scrollHeight - scroller.clientHeight;
+            scroller.scrollTop = Math.max(0, Math.min(max, scroller.scrollTop + top - 24));
+          }
+          return true;
+        }
+        if (Date.now() > deadline) return false;
+        await new Promise((resolve2) => setTimeout(resolve2, 150));
+      }
+    },
     openSession: (id) => {
       if (isAgentSessionId(id)) return actions.openAgentSession(id);
       ui2.set((state) => state.newChat || state.exchange || state.menu || state.palette ? { ...state, newChat: null, exchange: null, menu: null, palette: null } : state);

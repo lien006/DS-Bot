@@ -383,6 +383,36 @@ html[data-windows-titlebar]:not([data-fullscreen]) :is(.bt-pane,.bt-panel)::befo
 .bt-tabs>.bt-thumb{top:0;bottom:0;border-radius:9999px;background:var(--bt-hover)}
 .bt-tabs[data-glide] .bt-tab[aria-selected=true]{background:transparent}
 .bt-drawer-body{flex:1;overflow-y:auto;padding:20px 16px 16px;font-size:13px;line-height:18px;display:flex;flex-direction:column;gap:16px}
+/* Topics: the labels that group a chat in the sidebar. */
+.bt-topics{display:flex;flex-direction:column;gap:10px}
+.bt-topic-chips{display:flex;flex-wrap:wrap;gap:6px}
+.bt-topic-wrap{display:inline-flex;flex-direction:column;gap:4px;max-width:100%}
+.bt-topic-chip-row{display:inline-flex;align-items:center}
+.bt-topic-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:0;border-radius:999px;background:var(--bt-tag-bg);color:var(--bt-tag-ink);font-size:12px;line-height:18px;cursor:pointer;max-width:100%}
+.bt-topic-chip:hover{background:var(--bt-hover)}
+.bt-topic-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
+.bt-topic-count{font-size:10px;opacity:.7}
+.bt-topic-x{border:0;background:none;color:inherit;cursor:pointer;font-size:13px;line-height:16px;padding:0 2px;border-radius:999px;opacity:.6;align-self:center}
+.bt-topic-x:hover{opacity:1;background:var(--bt-hover)}
+.bt-topic-spots{display:flex;flex-direction:column;gap:2px;padding:4px;border-radius:8px;background:var(--bt-hover)}
+.bt-topic-spot{display:flex;flex-direction:column;gap:2px}
+.bt-topic-spot-head{display:flex;gap:6px;align-items:baseline;border:0;background:none;color:var(--bt-ink-2);font-size:12px;line-height:16px;text-align:left;cursor:pointer;padding:2px 4px;border-radius:6px;width:100%}
+.bt-topic-spot-head:hover{background:var(--bt-card);color:var(--bt-ink)}
+.bt-topic-spot-body{padding:2px 6px 6px;border-left:2px solid var(--bt-line-2);margin-left:4px;display:flex;flex-direction:column;gap:6px}
+.bt-topic-spot-reply{font-size:12px;line-height:17px;color:var(--bt-ink-2);max-height:120px;overflow:hidden;white-space:pre-wrap;word-break:break-word}
+.bt-topic-spot-open{align-self:flex-start;border:0;background:var(--bt-hover);color:var(--bt-ink);font-size:12px;line-height:18px;padding:2px 8px;border-radius:6px;cursor:pointer}
+.bt-topic-spot-open:hover{background:var(--bt-active)}
+.bt-topic-spot-turn{flex:none;color:var(--bt-accent)}
+.bt-topic-spot-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}
+.bt-topic-spot-time{font-size:10px;color:var(--bt-ink-3);padding:2px 4px}
+.bt-topic-add{display:flex;gap:8px}
+.bt-topic-input{flex:1;min-width:0;border:.5px solid var(--bt-line-2);border-radius:8px;padding:6px 10px;background:var(--bt-main);color:var(--bt-ink);font-size:13px;line-height:18px;outline:none}
+.bt-topic-input:focus{border-color:var(--bt-accent)}
+.bt-row-topic{flex:none;font-size:10px;line-height:14px;padding:0 4px;border-radius:4px;background:var(--bt-tag-bg);color:var(--bt-tag-ink);white-space:nowrap;max-width:72px;overflow:hidden;text-overflow:ellipsis}
+.bt-row-topic-more{padding:0 3px}
+/* A row wrapper that only carries the event's seq for a topic jump; the flow
+   layout sees its children as if it were not there. */
+.bt-seq-row{display:contents}
 .bt-empty{text-align:center;color:var(--bt-ink-3);font-size:13px;line-height:18px;padding:8px 12px}
 .bt-section-title{font-size:12px;color:var(--bt-ink-2);margin-bottom:6px}
 .bt-muted{color:var(--bt-ink-2)}

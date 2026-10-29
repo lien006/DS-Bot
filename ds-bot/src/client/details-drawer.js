@@ -15,7 +15,7 @@ import { ScheduleSummary } from './schedules.js'
 import { useGlide, useMorph } from './motion.js'
 import { MemberApprovals, MemberState, StopMemberWork, useMemberWork, workState } from './member-status.js'
 import { PermissionPicker, presetDanger, presetName } from './permission-picker.js'
-import { t } from './i18n.js'
+import { t, dateLocale } from './i18n.js'
 
 function transcriptOf(list, id, name, hiddenTurns = []) {
   const outline = list.projectionsBySession?.[id]?.values?.turnOutline ?? list.byId[id]?.projectionValues?.turnOutline
@@ -29,7 +29,9 @@ function transcriptOf(list, id, name, hiddenTurns = []) {
   return lines.join('\n\n')
 }
 
-const TAB_LABELS = { details: 'Details', browser: 'Browser' }
+const TAB_LABELS = { topics: 'Topics', details: 'Details', browser: 'Browser' }
+// The Topics tab wears a leading #, which names the feature in one glance.
+const tabLabel = key => (key === 'topics' ? `#${t(TAB_LABELS[key])}` : t(TAB_LABELS[key]))
 
 const hostOf = (url) => { try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' } }
 const shortUrl = url => String(url ?? '').replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '')
@@ -116,6 +118,153 @@ function About({ text, title = 'About' }) {
     h('div', { className: 'bt-section-title' }, t(title)),
     h('div', { ref: body, className: 'bt-about', 'data-open': open || undefined }, text),
     long ? h('button', { type: 'button', className: 'bt-more', onClick: () => setOpen(value => !value) }, open ? t('Show less') : t('Show more')) : null)
+}
+
+// The Bot's topics: auto labels arrive after each turn (with the seq of the user
+// line they came from), manual ones are typed here. The sidebar shows the first
+// ones on the row. Expanding a topic lists where it came from; picking an entry
+// opens the chat.
+function TopicsPanel({ bot, actions, run, useSessions }) {
+  const topics = Array.isArray(bot.topics) ? bot.topics : []
+  const log = bot.topicLog ?? {}
+  const [draft, setDraft] = useState('')
+  const [open, setOpen] = useState(null)
+  const [openSpot, setOpenSpot] = useState(null)
+  const [backfilling, setBackfilling] = useState(false)
+  // A chat with turns but no topics yet is labelled from its history once, the
+  // first time the panel opens for it.
+  const backfilled = useRef(false)
+  useEffect(() => {
+    if ((topics.length > 0 && Object.keys(log).length > 0) || backfilled.current || actions.topicsBackfill === undefined) return
+    backfilled.current = true
+    setBackfilling(true)
+    Promise.resolve(actions.topicsBackfill(bot.id)).catch(() => {}).finally(() => setBackfilling(false))
+  }, [bot.id])
+  // The turn outline carries each turn's own seq; an anchor points at a user line,
+  // whose turn is the last outline entry at or before it. Prompts can be empty in
+  // the outline, so a spot may show the answer's opening instead.
+  const outline = useSessions(list => {
+    const id = currentPart(bot)
+    const raw = list.projectionsBySession?.[id]?.values?.turnOutline ?? list.byId[id]?.projectionValues?.turnOutline
+    // The projection arrives either as the entry list itself or wrapped in {turns}.
+    const entries = Array.isArray(raw) ? raw : Array.isArray(raw?.turns) ? raw.turns : []
+    return JSON.stringify(entries.map(entry => [entry.seq, entry.turn, (entry.prompt ?? '').slice(0, 140), stripHeader(entry.response ?? '').slice(0, 200)]))
+  })
+  const turns = JSON.parse(outline)
+  const entryOfTurn = turn => turns.find(entry => entry[1] === turn)
+  const entryNearSeq = seq => turns.filter(entry => Number(entry[0]) <= seq).at(-1)
+  // Anchors are keyed by turn — the unit the official chat's turn rail jumps by;
+  // an anchor from before turns were kept still lands through its seq.
+  const spotsOf = anchor => {
+    if (anchor === undefined) return []
+    const entries = Array.isArray(anchor.turns) && anchor.turns.length > 0
+      ? anchor.turns.map(entryOfTurn)
+      : (anchor.seqs ?? []).map(entryNearSeq)
+    return [...new Map(entries.filter(Boolean).map(entry => [entry[1], entry])).values()]
+      .map(entry => ({ turn: entry[1], seq: entry[0], prompt: entry[2], response: entry[3] }))
+  }
+  // The chat's own turn rail (the official TurnNavigator) carries a mark per turn;
+  // clicking a mark runs the real jump, history paging included. The marks are
+  // virtualized, so a far one is brought in by scrolling the rail first.
+  const turnRail = () => [...document.querySelectorAll('nav[aria-label]')]
+    .find(nav => /^(轮次导航|Turn navigation)$/.test(nav.getAttribute('aria-label') || ''))
+  const railMark = (rail, turn) => [...rail.querySelectorAll('button')].find(item => {
+    const label = item.getAttribute('aria-label') || ''
+    return label.includes(`第 ${turn} 轮`) || new RegExp(`turn ${turn}\\b`, 'i').test(label)
+  })
+  // Every step reports what it saw, so a jump that does not land says why.
+  const clickTurnRail = (turn, report) => {
+    let tries = 0
+    const attempt = () => {
+      const rail = turnRail()
+      if (rail === undefined) {
+        if (tries > 60) { report(`定位失败：等了 6 秒没找到轮次导航（页面 nav 数 ${document.querySelectorAll('nav').length}）`); return true }
+        return false
+      }
+      const button = railMark(rail, turn)
+      if (button !== undefined) { button.click(); report(`已定位到第 ${turn} 轮`); return true }
+      if (tries > 60) {
+        const marks = [...rail.querySelectorAll('button')].slice(0, 5).map(item => item.getAttribute('aria-label'))
+        report(`定位失败：轮轨上没有第 ${turn} 轮（标记示例 ${JSON.stringify(marks)}）`)
+        return true
+      }
+      const scroller = rail.querySelector('div')
+      if (scroller !== null) scroller.scrollTop += 120
+      return false
+    }
+    const step = () => {
+      tries += 1
+      if (attempt()) return
+      setTimeout(step, 100)
+    }
+    step()
+  }
+  const locateTurn = spot => {
+    actions.openSession(bot.id)
+    if (spot.turn === undefined) return
+    const report = text => actions.reportError(new Error(text), 'topic-locate')
+    // The rebuild of the chat's own jump: history through the seq, then the row
+    // centred. Falls back to the rail only where that action is not provided.
+    if (actions.chatJump !== undefined) {
+      setTimeout(() => {
+        void actions.chatJump(bot.id, spot.turn, spot.seq)
+          .then(landed => report(landed ? `已定位到第 ${spot.turn} 轮` : `定位失败：对话里没有第 ${spot.turn} 轮`))
+      }, 300)
+      return
+    }
+    // The chat view and its rail mount after the session opens.
+    setTimeout(() => clickTurnRail(spot.turn, report), 350)
+  }
+  const save = next => run(actions.setFlags(bot.id, { topics: next }))
+  const add = () => {
+    const value = draft.trim()
+    if (value === '') return
+    setDraft('')
+    if (topics.includes(value)) return
+    void save([...topics, value])
+  }
+  return h('div', { className: 'bt-topics' },
+    h('div', { className: 'bt-section-title' }, t('Topics')),
+    h('div', { className: 'bt-note' }, t("Turns are labelled as they finish; add your own below. The sidebar shows the first ones.")),
+    topics.length > 0
+      ? h('div', { className: 'bt-topic-chips' }, topics.map(topic => {
+          const anchor = log[topic]
+          // Spots come from the anchors themselves, so the list shows even when the
+          // outline has nothing to match; the text simply falls back.
+          const spots = spotsOf(anchor)
+          return h('span', { key: topic, className: 'bt-topic-wrap' },
+            h('span', { className: 'bt-topic-chip-row' },
+              h('button', {
+                type: 'button', className: 'bt-topic-chip', 'aria-expanded': open === topic || undefined,
+                onClick: () => { setOpen(open === topic ? null : topic); if (open !== topic && spots.length === 0) actions.openSession(bot.id) },
+              },
+                h('span', { className: 'bt-topic-text' }, `#${topic}`),
+                spots.length > 0 ? h('span', { className: 'bt-topic-count' }, `×${spots.length}`) : null),
+              h('button', {
+                type: 'button', className: 'bt-topic-x', 'aria-label': t('Remove topic {topic}', { topic }), title: t('Remove'),
+                onClick: () => void save(topics.filter(other => other !== topic)),
+              }, '×')),
+            open === topic && spots.length > 0 ? h('div', { className: 'bt-topic-spots' },
+              spots.map(spot => h('div', { key: spot.turn, className: 'bt-topic-spot' },
+                h('button', {
+                  type: 'button', className: 'bt-topic-spot-head',
+                  onClick: () => setOpenSpot(openSpot === spot.turn ? null : spot.turn),
+                },
+                  h('span', { className: 'bt-topic-spot-turn' }, spot.turn !== undefined ? `#${spot.turn}` : '•'),
+                  h('span', { className: 'bt-topic-spot-text' }, spot.prompt || (spot.response ?? '').slice(0, 60) || t('A turn'))),
+                openSpot === spot.turn ? h('div', { className: 'bt-topic-spot-body' },
+                  spot.response ? h('div', { className: 'bt-topic-spot-reply' }, spot.response) : null,
+                  h('button', { type: 'button', className: 'bt-topic-spot-open', onClick: () => locateTurn(spot) }, t('Locate in conversation'))) : null)),
+              anchor?.time ? h('span', { className: 'bt-topic-spot-time' }, new Date(anchor.time).toLocaleString(dateLocale())) : null) : null)
+        }))
+      : h('div', { className: 'bt-muted' }, backfilling ? t('Labelling recent turns…') : t('No topics yet.')),
+    h('div', { className: 'bt-topic-add' },
+      h('input', {
+        className: 'bt-topic-input', value: draft, maxLength: 16, 'aria-label': t('New topic'), placeholder: t('New topic'),
+        onChange: event => setDraft(event.target.value),
+        onKeyDown: (event) => { if (event.key === 'Enter') { event.preventDefault(); add() } },
+      }),
+      h('button', { type: 'button', className: 'bt-soft', disabled: draft.trim() === '', onClick: add }, t('Add'))))
 }
 
 // A group's face in its details: its first members side by side, each on a disc that
@@ -247,8 +396,9 @@ export function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, ro
     if (room) await run(actions.updateRoom(room.id, { name: next }))
   }
   const subtitle = bot ? bot.role : roomSubtitle(room, roster)
-  // Tab sets: a 1:1 Bot has Details and Browser; a group has only Details, so no tab row.
-  const tabs = bot ? ['details', 'browser'] : ['details']
+  // Tab sets: a 1:1 Bot has Topics, Details and Browser; a group has only Details,
+  // so no tab row.
+  const tabs = bot ? ['topics', 'details', 'browser'] : ['details']
   return [h(Fragment, { key: 'top' }, top),
     h('div', { key: 'id', className: 'bt-drawer-id', 'data-move': side },
       bot ? h(BotAvatar, { bot, size: 64, state: botState(running, doing, roster.questions?.[part] !== undefined), main: isMainBot, badge: false, gaze: true, pokeable: true })
@@ -264,10 +414,11 @@ export function DetailsDrawer({ sessionId, startRenaming, startTab, hasStrip, ro
       subtitle ? h('span', { className: 'bt-drawer-role' }, subtitle) : null),
     tabs.length > 1 ? h('div', { key: 'tabs', ref: glide.box, className: 'bt-tabs', role: 'tablist', 'data-move': side },
       h('span', { ref: glide.thumb, className: 'bt-thumb', 'aria-hidden': true }),
-      tabs.map(key => h('button', { key, type: 'button', role: 'tab', className: 'bt-tab', 'aria-selected': tab === key, onClick: () => setTab(key) }, t(TAB_LABELS[key])))) : null,
+      tabs.map(key => h('button', { key, type: 'button', role: 'tab', className: 'bt-tab', 'aria-selected': tab === key, onClick: () => setTab(key) }, tabLabel(key)))) : null,
     h('div', { key: `body:${tab}`, className: 'bt-drawer-body', 'data-move': move },
       errorLine,
       room && tab === 'details' ? h(GroupOverview, { room, roster, actions, usage, useWork, openSettings: () => setView('settings') }) : null,
+      bot && tab === 'topics' ? h(TopicsPanel, { bot, actions, run, useSessions }) : null,
       bot && tab === 'details' ? [
         h(RunStats, { key: 'stats', bot, part, running, actions }),
         h('div', { key: 'model', className: 'bt-drawer-model' },
