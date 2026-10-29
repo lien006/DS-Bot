@@ -298,8 +298,12 @@ test('cancelling a relay download removes its save path', async t => {
     async cancel() { this.emit('done', {}, 'cancelled') },
   })
   handlers.get('bot:a')({ preventDefault() {} }, item, views[0].webContents)
-  await new Promise(resolve => setTimeout(resolve, 0))
-  const guid = events.find(message => message.method === 'Browser.downloadWillBegin').params.guid
+  let willBegin
+  for (let tries = 0; tries < 100 && !willBegin; tries++) {
+    await new Promise(resolve => setTimeout(resolve, 10))
+    willBegin = events.find(message => message.method === 'Browser.downloadWillBegin')
+  }
+  const guid = willBegin.params.guid
   await request(socket, 3, 'Browser.cancelDownload', { guid })
   for (let tries = 0; tries < 100 && existsSync(savePath); tries++) await new Promise(resolve => setTimeout(resolve, 10))
   assert.equal(existsSync(savePath), false)
